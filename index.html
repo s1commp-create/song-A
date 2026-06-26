@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#6C5CE7">
+<link rel="manifest" href="manifest.json">
+<title>工具箱</title>
+<style>
+:root {
+  --primary: #6C5CE7;
+  --primary-light: #A29BFE;
+  --bg: #F8F9FA;
+  --card: #FFFFFF;
+  --text: #333333;
+  --text-light: #999999;
+  --radius: 16px;
+  --shadow: 0 4px 12px rgba(108,92,231,0.15);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== 顶部渐变栏 ===== */
+.header {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  padding: 48px 20px 20px;
+  border-radius: 0 0 24px 24px;
+  position: sticky; top: 0; z-index: 100;
+}
+.header-top {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.header h1 { color: #fff; font-size: 26px; font-weight: 800; }
+.header p { color: rgba(255,255,255,0.8); font-size: 13px; margin-top: 4px; }
+.btn-add {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: #fff; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: var(--primary);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s;
+}
+.btn-add:active { transform: scale(0.9); }
+
+/* ===== 分类标签栏 ===== */
+.category-bar {
+  display: flex; gap: 8px; padding: 12px 16px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.category-bar::-webkit-scrollbar { display: none; }
+.cat-tag {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px 14px; border-radius: 20px;
+  background: var(--card); border: none;
+  font-size: 13px; color: var(--text-light);
+  cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.cat-tag.active {
+  background: #EDE9FF; color: var(--primary); font-weight: 600;
+}
+.cat-tag .icon { font-size: 16px; }
+
+/* ===== 工具网格 ===== */
+.grid-container { padding: 8px 16px 100px; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.tool-card {
+  display: flex; flex-direction: column; align-items: center;
+  cursor: pointer; -webkit-user-select: none; user-select: none;
+  transition: transform 0.2s;
+}
+.tool-card:active { transform: scale(0.92); }
+.tool-icon {
+  width: 100%; aspect-ratio: 1;
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; color: #fff;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.tool-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  margin-top: 8px; text-align: center;
+  max-width: 100%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.tool-cat {
+  font-size: 11px; color: var(--text-light); margin-top: 2px;
+}
+
+/* ===== 空状态 ===== */
+.empty {
+  text-align: center; padding: 80px 20px;
+}
+.empty .icon { font-size: 64px; opacity: 0.3; }
+.empty h3 { color: #ccc; margin-top: 16px; font-size: 18px; }
+.empty p { color: #ddd; margin-top: 8px; font-size: 14px; }
+
+/* ===== 模态框通用 ===== */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--bg);
+  border-radius: 24px 24px 0 0;
+  width: 100%; max-height: 85vh;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-overlay.show .modal { transform: translateY(0); }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 20px 12px; position: sticky; top: 0;
+  background: var(--bg); z-index: 10;
+}
+.modal-header h2 { font-size: 20px; font-weight: 700; }
+.modal-close {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #eee; border: none; cursor: pointer;
+  font-size: 20px; display: flex; align-items: center; justify-content: center;
+}
+.modal-body { padding: 0 20px 32px; }
+
+/* ===== 表单元素 ===== */
+.form-group { margin-bottom: 20px; }
+.form-label { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 8px; display: block; }
+.form-input {
+  width: 100%; padding: 14px 16px;
+  border: none; border-radius: 12px;
+  background: var(--card); font-size: 16px; color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  outline: none;
+}
+.form-input:focus { box-shadow: 0 0 0 2px var(--primary); }
+
+/* ===== 文件选择区 ===== */
+.file-drop {
+  border: 2px dashed #ddd; border-radius: 16px;
+  padding: 32px; text-align: center;
+  cursor: pointer; transition: all 0.2s;
+  background: var(--card);
+}
+.file-drop:hover, .file-drop.dragover { border-color: var(--primary); background: #F5F3FF; }
+.file-drop .icon { font-size: 40px; color: var(--primary); }
+.file-drop h3 { margin-top: 12px; font-size: 16px; }
+.file-drop p { color: var(--text-light); font-size: 13px; margin-top: 4px; }
+.file-drop input { display: none; }
+.file-info {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border-radius: 12px; padding: 12px;
+  margin-top: 12px;
+}
+.file-info .icon { font-size: 32px; color: var(--primary); }
+.file-info .name { font-weight: 600; font-size: 14px; }
+.file-info .size { font-size: 12px; color: var(--text-light); }
+
+/* ===== 图标选择 ===== */
+.icon-grid {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.icon-opt {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card); font-size: 22px;
+  cursor: pointer; transition: all 0.2s;
+  border: 2px solid transparent;
+}
+.icon-opt.active { background: #EDE9FF; border-color: var(--primary); }
+
+/* ===== 颜色选择 ===== */
+.color-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.color-opt {
+  width: 36px; height: 36px; border-radius: 50%;
+  cursor: pointer; transition: all 0.2s;
+  border: 3px solid transparent;
+}
+.color-opt.active { border-color: #333; transform: scale(1.1); }
+
+/* ===== 分类选择 ===== */
+.cat-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.cat-opt {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 12px;
+  background: var(--card); border: none;
+  font-size: 14px; color: #666;
+  cursor: pointer; transition: all 0.2s;
+}
+.cat-opt.active { background: #EDE9FF; color: var(--primary); font-weight: 600; }
+
+/* ===== 按钮 ===== */
+.btn-primary {
+  width: 100%; padding: 16px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: #fff; font-size: 17px; font-weight: 700;
+  border: none; border-radius: 16px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: opacity 0.2s;
+}
+.btn-primary:active { opacity: 0.8; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== WebView 全屏 ===== */
+.webview-screen {
+  position: fixed; inset: 0; z-index: 300;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.webview-screen.show { transform: translateX(0); }
+.webview-header {
+  background: var(--primary);
+  padding: 48px 12px 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.webview-header .btn-back {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,0.2); border: none;
+  color: #fff; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.webview-header .title {
+  flex: 1; color: #fff; font-size: 17px; font-weight: 700;
+  text-align: center; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.webview-header .btn-refresh {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,0.2); border: none;
+  color: #fff; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.webview-frame { flex: 1; border: none; background: #fff; }
+
+/* ===== 长按菜单 ===== */
+.context-menu {
+  position: fixed; z-index: 250;
+  background: var(--card); border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  overflow: hidden; min-width: 160px;
+  opacity: 0; pointer-events: none;
+  transform: scale(0.9);
+  transition: all 0.2s;
+}
+.context-menu.show { opacity: 1; pointer-events: auto; transform: scale(1); }
+.ctx-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border: none; background: none;
+  width: 100%; font-size: 15px; color: var(--text);
+  cursor: pointer; text-align: left;
+}
+.ctx-item:active { background: #F5F3FF; }
+.ctx-item.danger { color: #E74C3C; }
+.ctx-item .icon { font-size: 18px; width: 24px; text-align: center; }
+.ctx-item + .ctx-item { border-top: 1px solid #f0f0f0; }
+
+/* ===== 提示 ===== */
+.toast {
+  position: fixed; bottom: 100px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #333; color: #fff;
+  padding: 12px 24px; border-radius: 12px;
+  font-size: 14px; z-index: 400;
+  opacity: 0; pointer-events: none;
+  transition: all 0.3s;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== 动画 ===== */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.animate-in { animation: fadeIn 0.4s ease forwards; }
+</style>
+</head>
+<body>
+
+<!-- 首页 -->
+<div class="header">
+  <div class="header-top">
+    <div>
+      <h1>🧰 工具箱</h1>
+      <p id="toolCount">0 个工具 · 点击打开 · 长按管理</p>
+    </div>
+    <button class="btn-add" onclick="showAddModal()">+</button>
+  </div>
+</div>
+
+<div class="category-bar" id="categoryBar"></div>
+<div class="grid-container">
+  <div class="grid" id="toolGrid"></div>
+</div>
+
+<!-- 添加工具弹窗 -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>添加工具</h2>
+      <button class="modal-close" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- 步骤1: 选文件 -->
+      <div id="addStep1">
+        <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()">
+          <div class="icon">📄</div>
+          <h3>选择 HTML 文件</h3>
+          <p>点击或拖拽 .html 文件到此处</p>
+          <input type="file" id="fileInput" accept=".html,.htm" onchange="handleFileSelect(event)">
+        </div>
+      </div>
+      <!-- 步骤2: 配置 -->
+      <div id="addStep2" style="display:none">
+        <div id="filePreviewBox"></div>
+        <div class="form-group">
+          <label class="form-label">工具名称</label>
+          <input class="form-input" id="toolNameInput" placeholder="给工具起个名字">
+        </div>
+        <div class="form-group">
+          <label class="form-label">选择图标</label>
+          <div class="icon-grid" id="iconGrid"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">图标颜色</label>
+          <div class="color-grid" id="colorGrid"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">工具分类</label>
+          <div class="cat-grid" id="catGrid"></div>
+        </div>
+        <button class="btn-primary" onclick="saveTool()">
+          <span>✓</span> 添加到工具箱
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑工具弹窗 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>编辑工具</h2>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editPreviewBox"></div>
+      <div class="form-group">
+        <label class="form-label">工具名称</label>
+        <input class="form-input" id="editNameInput">
+      </div>
+      <div class="form-group">
+        <label class="form-label">选择图标</label>
+        <div class="icon-grid" id="editIconGrid"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">图标颜色</label>
+        <div class="color-grid" id="editColorGrid"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">工具分类</label>
+        <div class="cat-grid" id="editCatGrid"></div>
+      </div>
+      <button class="btn-primary" onclick="saveEdit()">
+        <span>✓</span> 保存修改
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 长按菜单 -->
+<div class="context-menu" id="contextMenu">
+  <button class="ctx-item" onclick="ctxAction('rename')"><span class="icon">✏️</span> 重命名</button>
+  <button class="ctx-item" onclick="ctxAction('icon')"><span class="icon">🎨</span> 更换图标</button>
+  <button class="ctx-item" onclick="ctxAction('category')"><span class="icon">📁</span> 更改分类</button>
+  <button class="ctx-item danger" onclick="ctxAction('delete')"><span class="icon">🗑️</span> 删除</button>
+</div>
+
+<!-- WebView 全屏 -->
+<div class="webview-screen" id="webviewScreen">
+  <div class="webview-header">
+    <button class="btn-back" onclick="closeWebview()">←</button>
+    <span class="title" id="webviewTitle"></span>
+    <button class="btn-refresh" onclick="refreshWebview()">⟳</button>
+  </div>
+  <iframe class="webview-frame" id="webviewFrame"></iframe>
+</div>
+
+<!-- 提示 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== 数据 =====
+const ICONS = [
+  '📱','💻','🔧','🧮','📅','📷','💬','☁️','🧭','⬇️',
+  '🌍','📁','🔒','🚩','⚡','🧪','🎮','🎁','🌐','🔨',
+  '🎧','❤️','🏠','🖼️','🔑','🗣️','📐','🔗','📋','📍',
+  '🔒','📜','✉️','🗺️','🏅','📢','🎵','🧭','📰','🔔',
+  '🎨','📨','🐾','✏️','📞','📊','🪐','🏷️','🖨️','💓',
+  '🚀','💾','🏫','🔍','🛡️','⭐','⌨️','🕐','🏆','📹',
+  '💰','⌚','📶','🧰','📊','🗂️','⚙️','🎯','🧩','💡'
+];
+
+const COLORS = [
+  '#6C5CE7','#0984E3','#00B894','#FDCB6E','#E17055',
+  '#D63031','#E84393','#00CEC9','#55EFC4','#74B9FF',
+  '#A29BFE','#FFEAA7','#FAB1A0','#FF7675','#636E72',
+  '#2D3436','#FD79A8','#00B4D8','#023E8A','#6A0572'
+];
+
+const CATEGORIES = [
+  { id: 'all', name: '全部', icon: '📱' },
+  { id: 'dev', name: '开发', icon: '💻' },
+  { id: 'tool', name: '工具', icon: '🔧' },
+  { id: 'media', name: '媒体', icon: '🎬' },
+  { id: 'other', name: '其他', icon: '📦' }
+];
+
+let tools = JSON.parse(localStorage.getItem('tb_tools') || '[]');
+let activeCategory = 'all';
+let selectedFile = null;
+let selectedIcon = ICONS[0];
+let selectedColor = COLORS[0];
+let selectedCat = 'tool';
+let editingTool = null;
+let contextTool = null;
+let longPressTimer = null;
+
+// ===== 存储 =====
+function saveTools() {
+  localStorage.setItem('tb_tools', JSON.stringify(tools));
+}
+
+// ===== 首页渲染 =====
+function renderCategories() {
+  const bar = document.getElementById('categoryBar');
+  bar.innerHTML = CATEGORIES.map(c => {
+    const count = c.id === 'all' ? tools.length : tools.filter(t => t.category === c.id).length;
+    return `<button class="cat-tag ${activeCategory === c.id ? 'active' : ''}" onclick="setCategory('${c.id}')">
+      <span class="icon">${c.icon}</span> ${c.name} (${count})
+    </button>`;
+  }).join('');
+}
+
+function renderGrid() {
+  const grid = document.getElementById('toolGrid');
+  const filtered = activeCategory === 'all' ? tools : tools.filter(t => t.category === activeCategory);
+  document.getElementById('toolCount').textContent = `${tools.length} 个工具 · 点击打开 · 长按管理`;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column: 1/-1">
+      <div class="icon">📦</div>
+      <h3>还没有工具</h3>
+      <p>点击右上角 + 导入你的 HTML 工具</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map((t, i) => `
+    <div class="tool-card animate-in" style="animation-delay: ${i * 0.05}s"
+      onclick="openTool('${t.id}')"
+      oncontextmenu="event.preventDefault(); showContext('${t.id}', event)"
+      ontouchstart="startLongPress('${t.id}', event)"
+      ontouchend="cancelLongPress()"
+      ontouchmove="cancelLongPress()">
+      <div class="tool-icon" style="background: ${t.color}">${t.icon}</div>
+      <div class="tool-name">${t.name}</div>
+      <div class="tool-cat">${CATEGORIES.find(c => c.id === t.category)?.name || '其他'}</div>
+    </div>
+  `).join('');
+}
+
+function setCategory(id) {
+  activeCategory = id;
+  renderCategories();
+  renderGrid();
+}
+
+// ===== 长按 =====
+function startLongPress(id, e) {
+  longPressTimer = setTimeout(() => {
+    showContext(id, e);
+  }, 500);
+}
+function cancelLongPress() {
+  clearTimeout(longPressTimer);
+}
+
+// ===== 右键/长按菜单 =====
+function showContext(id, e) {
+  contextTool = tools.find(t => t.id === id);
+  const menu = document.getElementById('contextMenu');
+  const touch = e.touches ? e.touches[0] : e;
+  menu.style.left = Math.min(touch.clientX, window.innerWidth - 180) + 'px';
+  menu.style.top = Math.min(touch.clientY, window.innerHeight - 200) + 'px';
+  menu.classList.add('show');
+
+  const close = (ev) => {
+    if (!menu.contains(ev.target)) { hideContext(); document.removeEventListener('touchstart', close); document.removeEventListener('click', close); }
+  };
+  setTimeout(() => { document.addEventListener('touchstart', close); document.addEventListener('click', close); }, 10);
+}
+
+function hideContext() {
+  document.getElementById('contextMenu').classList.remove('show');
+}
+
+function ctxAction(action) {
+  hideContext();
+  if (!contextTool) return;
+
+  if (action === 'delete') {
+    if (confirm(`确定删除「${contextTool.name}」？`)) {
+      tools = tools.filter(t => t.id !== contextTool.id);
+      saveTools(); renderCategories(); renderGrid();
+      showToast('已删除');
+    }
+    return;
+  }
+
+  if (action === 'rename') {
+    const name = prompt('输入新名称', contextTool.name);
+    if (name?.trim()) {
+      contextTool.name = name.trim();
+      saveTools(); renderGrid();
+      showToast('已重命名');
+    }
+    return;
+  }
+
+  // icon / category → 打开编辑弹窗
+  openEditModal(contextTool, action);
+}
+
+// ===== 添加工具 =====
+function showAddModal() {
+  document.getElementById('addModal').classList.add('show');
+  document.getElementById('addStep1').style.display = '';
+  document.getElementById('addStep2').style.display = 'none';
+  selectedFile = null;
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('show');
+}
+
+// 文件选择
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.name.match(/\.html?$/i)) { showToast('请选择 .html 文件'); return; }
+  selectedFile = file;
+  showAddStep2();
+}
+
+// 拖拽
+const fileDrop = document.getElementById('fileDrop');
+fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+fileDrop.addEventListener('drop', e => {
+  e.preventDefault(); fileDrop.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file?.name.match(/\.html?$/i)) { selectedFile = file; showAddStep2(); }
+  else showToast('请选择 .html 文件');
+});
+
+function showAddStep2() {
+  document.getElementById('addStep1').style.display = 'none';
+  document.getElementById('addStep2').style.display = '';
+
+  const name = selectedFile.name.replace(/\.html?$/i, '');
+  document.getElementById('toolNameInput').value = name;
+  selectedIcon = ICONS[0];
+  selectedColor = COLORS[0];
+  selectedCat = 'tool';
+
+  // 文件预览
+  document.getElementById('filePreviewBox').innerHTML = `
+    <div class="file-info">
+      <span class="icon">📄</span>
+      <div><div class="name">${selectedFile.name}</div>
+      <div class="size">${(selectedFile.size / 1024).toFixed(1)} KB</div></div>
+    </div>`;
+
+  renderIconGrid('iconGrid', selectedIcon, (ic) => { selectedIcon = ic; renderIconGrid('iconGrid', ic, arguments.callee); });
+  renderColorGrid('colorGrid', selectedColor, (c) => { selectedColor = c; renderColorGrid('colorGrid', c, arguments.callee); });
+  renderCatGrid('catGrid', selectedCat, (c) => { selectedCat = c; renderCatGrid('catGrid', c, arguments.callee); });
+}
+
+function renderIconGrid(containerId, active, onSelect) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = ICONS.map(ic =>
+    `<div class="icon-opt ${ic === active ? 'active' : ''}" onclick="this.dataset.handler()">${ic}</div>`
+  ).join('');
+  // 绑定事件
+  container.querySelectorAll('.icon-opt').forEach((el, i) => {
+    el.dataset.handler = '';
+    el.onclick = () => onSelect(ICONS[i]);
+  });
+}
+
+function renderColorGrid(containerId, active, onSelect) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = COLORS.map(c =>
+    `<div class="color-opt ${c === active ? 'active' : ''}" style="background:${c}" onclick=""></div>`
+  ).join('');
+  container.querySelectorAll('.color-opt').forEach((el, i) => {
+    el.onclick = () => onSelect(COLORS[i]);
+  });
+}
+
+function renderCatGrid(containerId, active, onSelect) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = CATEGORIES.filter(c => c.id !== 'all').map(c =>
+    `<button class="cat-opt ${c.id === active ? 'active' : ''}">${c.icon} ${c.name}</button>`
+  ).join('');
+  container.querySelectorAll('.cat-opt').forEach((el, i) => {
+    const cat = CATEGORIES.filter(c => c.id !== 'all')[i];
+    el.onclick = () => onSelect(cat.id);
+  });
+}
+
+function saveTool() {
+  const name = document.getElementById('toolNameInput').value.trim();
+  if (!name) { showToast('请输入工具名称'); return; }
+  if (!selectedFile) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const tool = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+      name, icon: selectedIcon, color: selectedColor,
+      category: selectedCat,
+      html: e.target.result,
+      fileName: selectedFile.name,
+      addedDate: new Date().toISOString()
+    };
+    tools.push(tool);
+    saveTools();
+    closeAddModal();
+    renderCategories();
+    renderGrid();
+    showToast(`「${name}」已添加`);
+  };
+  reader.readAsDataURL(selectedFile);
+}
+
+// ===== 编辑工具 =====
+function openEditModal(tool, focusField) {
+  editingTool = { ...tool };
+  document.getElementById('editModal').classList.add('show');
+  document.getElementById('editNameInput').value = tool.name;
+
+  document.getElementById('editPreviewBox').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px">
+      <div class="tool-icon" style="background:${tool.color};width:72px;height:72px;font-size:36px;display:inline-flex">${tool.icon}</div>
+    </div>`;
+
+  renderIconGrid('editIconGrid', tool.icon, (ic) => {
+    editingTool.icon = ic;
+    renderIconGrid('editIconGrid', ic, arguments.callee);
+    updateEditPreview();
+  });
+  renderColorGrid('editColorGrid', tool.color, (c) => {
+    editingTool.color = c;
+    renderColorGrid('editColorGrid', c, arguments.callee);
+    updateEditPreview();
+  });
+  renderCatGrid('editCatGrid', tool.category, (c) => {
+    editingTool.category = c;
+    renderCatGrid('editCatGrid', c, arguments.callee);
+  });
+}
+
+function updateEditPreview() {
+  document.getElementById('editPreviewBox').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px">
+      <div class="tool-icon" style="background:${editingTool.color};width:72px;height:72px;font-size:36px;display:inline-flex">${editingTool.icon}</div>
+    </div>`;
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+}
+
+function saveEdit() {
+  if (!editingTool) return;
+  const name = document.getElementById('editNameInput').value.trim();
+  if (name) editingTool.name = name;
+
+  const idx = tools.findIndex(t => t.id === editingTool.id);
+  if (idx !== -1) {
+    tools[idx] = { ...tools[idx], ...editingTool };
+    saveTools();
+    renderCategories();
+    renderGrid();
+    showToast('已保存');
+  }
+  closeEditModal();
+}
+
+// ===== WebView =====
+function openTool(id) {
+  const tool = tools.find(t => t.id === id);
+  if (!tool) return;
+
+  document.getElementById('webviewTitle').textContent = tool.name;
+  const frame = document.getElementById('webviewFrame');
+  const screen = document.getElementById('webviewScreen');
+
+  // 用 srcdoc 加载 HTML 内容
+  if (tool.html.startsWith('data:')) {
+    // data URI → 解码后用 srcdoc
+    fetch(tool.html).then(r => r.text()).then(html => {
+      frame.srcdoc = html;
+    });
+  } else {
+    frame.srcdoc = tool.html;
+  }
+
+  screen.classList.add('show');
+}
+
+function closeWebview() {
+  const screen = document.getElementById('webviewScreen');
+  screen.classList.remove('show');
+  setTimeout(() => {
+    document.getElementById('webviewFrame').srcdoc = '';
+  }, 350);
+}
+
+function refreshWebview() {
+  const frame = document.getElementById('webviewFrame');
+  const src = frame.srcdoc;
+  frame.srcdoc = '';
+  setTimeout(() => { frame.srcdoc = src; }, 50);
+}
+
+// ===== Toast =====
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ===== 点击空白关闭菜单 =====
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('contextMenu');
+  if (!menu.contains(e.target)) hideContext();
+});
+
+// ===== 初始化 =====
+renderCategories();
+renderGrid();
+</script>
+
+<!-- PWA Service Worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
