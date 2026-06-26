@@ -198,18 +198,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">CORS 代理地址</label>
-        <input class="form-input" id="proxyInput" placeholder="https://your-worker.workers.dev">
-        <div class="form-hint">需要部署一个 Cloudflare Worker 作为 CORS 代理（免费）。在设置页面底部查看部署教程。</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">坚果云账号（邮箱）</label>
-        <input class="form-input" id="davUserInput" placeholder="your@email.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">坚果云应用密码</label>
-        <input class="form-input" id="davPassInput" type="password" placeholder="应用专用密码">
-        <div class="form-hint">在坚果云 → 安全设置 → 第三方应用管理 中创建</div>
+        <label class="form-label">GitHub Token</label>
+        <input class="form-input" id="githubTokenInput" type="password" placeholder="github_pat_...">
+        <div class="form-hint">需要 Gist 读写权限。在 GitHub → Settings → Developer settings → Personal access tokens 创建</div>
       </div>
       <div class="form-group">
         <label class="form-label">加密秘钥</label>
@@ -218,16 +209,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <button class="btn-primary" onclick="saveSettings()">💾 保存并启用同步</button>
       <button class="btn-secondary btn-danger" onclick="clearSyncSettings()" style="margin-top:16px">🗑️ 清除同步设置</button>
-
-      <div style="margin-top:24px;padding:16px;background:#fff;border-radius:12px;">
-        <h3 style="font-size:15px;margin-bottom:12px">📖 部署教程</h3>
-        <ol style="font-size:13px;color:#666;line-height:2;padding-left:20px">
-          <li>打开 <strong>https://dash.cloudflare.com</strong> 注册/登录</li>
-          <li>左侧菜单 → Workers & Pages → Create Worker</li>
-          <li>把 worker.js 的内容粘贴进去，点 Deploy</li>
-          <li>复制 Worker 的地址填入上方</li>
-        </ol>
-      </div>
 
       <div style="margin-top:16px;padding:16px;background:#fff;border-radius:12px;">
         <h3 style="font-size:15px;margin-bottom:12px">⚙️ 其他</h3>
@@ -314,25 +295,39 @@ async function decrypt(encoded,password){
   return new TextDecoder().decode(decrypted);
 }
 
-// ===== Worker API 同步 =====
-function getProxyUrl(){
-  if(!syncConfig?.proxy)return null;
-  return syncConfig.proxy.replace(/\/$/,'');
+// ===== GitHub Gist 同步 =====
+const GIST_FILENAME='toolbox-data.json';
+async function githubApi(method,path,body){
+  if(!syncConfig||!syncConfig.token)throw new Error('未配置 GitHub Token');
+  const opts={method,headers:{'Authorization':'Bearer '+syncConfig.token,'Accept':'application/vnd.github+json','Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const resp=await fetch('https://api.github.com'+path,opts);
+  if(!resp.ok){
+    const err=await resp.json().catch(()=>({}));
+    throw new Error(err.message||'GitHub API error '+resp.status);
+  }
+  return resp.json();
 }
-async function workerPost(action,data){
-  const proxy=getProxyUrl();
-  if(!proxy)throw new Error('未配置代理地址');
-  const resp=await fetch(proxy,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:syncConfig.user,pass:syncConfig.pass,action,data})});
-  const result=await resp.json();
-  if(!result.ok)throw new Error(result.error||'请求失败 '+result.status);
-  return result;
+async function gistGet(){
+  if(!syncConfig.gistId)return null;
+  try{
+    const gist=await githubApi('GET','/gists/'+syncConfig.gistId);
+    const file=gist.files[GIST_FILENAME];
+    return file?file.content:null;
+  }catch(e){
+    if(e.message.includes('404'))return null;
+    throw e;
+  }
 }
-async function cloudGet(){
-  const r=await workerPost('get');
-  return r.data;
-}
-async function cloudPut(content){
-  await workerPost('put',content);
+async function gistPut(content){
+  const body={files:{[GIST_FILENAME]:{content}}};
+  if(syncConfig.gistId){
+    await githubApi('PATCH','/gists/'+syncConfig.gistId,body);
+  }else{
+    const gist=await githubApi('POST','/gists',{description:'toolbox-sync',public:false,files:{[GIST_FILENAME]:{content}}});
+    syncConfig.gistId=gist.id;
+    localStorage.setItem('tb_sync_config',JSON.stringify(syncConfig));
+  }
 }
 
 async function doSync(){
@@ -341,7 +336,7 @@ async function doSync(){
   btn.innerHTML='⟳';btn.classList.add('spinning');
   try{
     // 下载云端数据
-    const encrypted=await cloudGet();
+    const encrypted=await gistGet();
     let cloudTools=[];
     if(encrypted){
       try{
@@ -369,7 +364,7 @@ async function doSync(){
     // 上传合并后的数据
     const json=JSON.stringify(tools);
     const enc=await encrypt(json,currentKey);
-    await cloudPut(enc);
+    await gistPut(enc);
     renderCategories();renderGrid();
     showToast('☁️ 同步成功');
   }catch(e){
@@ -384,28 +379,20 @@ function showSettingsModal(){
   document.getElementById('settingsModal').classList.add('show');
   document.getElementById('versionDisplay').textContent=APP_VERSION;
   if(syncConfig){
-    document.getElementById('proxyInput').value=syncConfig.proxy||'';
-    document.getElementById('davUserInput').value=syncConfig.user||'';
-    document.getElementById('davPassInput').value=syncConfig.pass||'';
+    document.getElementById('githubTokenInput').value=syncConfig.token||'';
   }
 }
 function closeSettingsModal(){document.getElementById('settingsModal').classList.remove('show')}
 async function saveSettings(){
-  const proxy=document.getElementById('proxyInput').value.trim();
-  const user=document.getElementById('davUserInput').value.trim();
-  const pass=document.getElementById('davPassInput').value.trim();
+  const token=document.getElementById('githubTokenInput').value.trim();
   const key=document.getElementById('secretKeyInput').value.trim();
-  if(!proxy||!user||!pass){showToast('请填写完整信息');return}
+  if(!token){showToast('请填写 GitHub Token');return}
   if(!key){showToast('请设置秘钥');return}
   try{
-    // 测试连接
     showToast('测试连接中...');
-    const testResp=await fetch(proxy,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user,pass,action:'test'})});
-    const testResult=await testResp.json();
-    if(!testResult.ok)throw new Error('连接失败: '+(testResult.error||testResult.status));
-    // 保存配置（pass 用 key 加密）
-    const encPass=await encrypt(pass,key);
-    syncConfig={proxy,user,pass:encPass};
+    await fetch('https://api.github.com/user',{headers:{'Authorization':'Bearer '+token}}).then(r=>{if(!r.ok)throw new Error('Token 无效');});
+    const encToken=await encrypt(token,key);
+    syncConfig={token:encToken,gistId:syncConfig?.gistId||null};
     localStorage.setItem('tb_sync_config',JSON.stringify(syncConfig));
     currentKey=key;isUnlocked=true;
     closeSettingsModal();
@@ -447,8 +434,8 @@ async function unlockApp(){
   if(!key){showToast('请输入秘钥');return}
   if(!syncConfig){isUnlocked=true;currentKey=key;document.getElementById('unlockModal').classList.remove('show');return}
   try{
-    // 尝试解密 pass 验证秘钥
-    await decrypt(syncConfig.pass,key);
+    // 尝试解密 token 验证秘钥
+    await decrypt(syncConfig.token,key);
     currentKey=key;isUnlocked=true;
     document.getElementById('unlockModal').classList.remove('show');
     showToast('🔓 已解锁');
