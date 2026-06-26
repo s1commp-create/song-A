@@ -555,6 +555,34 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 // ===== 初始化 =====
 renderCategories();renderGrid();
 </script>
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}</script>
+<script>
+// ===== Service Worker + 自动更新检测 =====
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    // 检查更新
+    reg.addEventListener('updatefound',()=>{
+      const newWorker=reg.installing;
+      newWorker.addEventListener('statechange',()=>{
+        if(newWorker.state==='installed'&&navigator.serviceWorker.controller){
+          showUpdateBanner();
+        }
+      });
+    });
+    // 每次打开检查更新
+    reg.update();
+  });
+  // 监听控制器变化
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!refreshing){refreshing=true;window.location.reload()}
+  });
+}
+function showUpdateBanner(){
+  const banner=document.createElement('div');
+  banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:500;background:linear-gradient(135deg,#6C5CE7,#A29BFE);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;';
+  banner.innerHTML='<span>🆕 有新版本可用！</span><button onclick="navigator.serviceWorker.controller.postMessage(\"skipWaiting\")" style="background:#fff;color:#6C5CE7;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;">立即更新</button>';
+  document.body.appendChild(banner);
+}
+</script>
 </body>
 </html>
